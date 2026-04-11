@@ -29,3 +29,6 @@ _testmain.go
 /vendor
 /.idea
 /release-assets
+
+# Added by goreleaser init:
+dist/
