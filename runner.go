@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"os/user"
@@ -8,33 +9,31 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alaingilbert/cron"
 	"github.com/prometheus/client_golang/prometheus"
-	cron "github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 )
 
 type Runner struct {
 	cron     *cron.Cron
-	cronjobs map[cron.EntryID]*CrontabEntry
+	cronjobs []*CrontabEntry
 }
 
 func NewRunner() *Runner {
+	cron := cron.New().
+		WithParser(cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)).
+		Build()
+
 	r := &Runner{
-		cron: cron.New(
-			cron.WithParser(
-				cron.NewParser(
-					cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor,
-				),
-			),
-		),
-		cronjobs: map[cron.EntryID]*CrontabEntry{},
+		cron:     cron,
+		cronjobs: make([]*CrontabEntry, 0),
 	}
 	return r
 }
 
 // Add crontab entry
 func (r *Runner) Add(cronjob CrontabEntry) error {
-	eid, err := r.cron.AddFunc(cronjob.Spec, r.cmdFunc(&cronjob, func(execCmd *exec.Cmd) bool {
+	eid, err := r.cron.AddJob(cronjob.Spec, r.cmdFunc(&cronjob, func(execCmd *exec.Cmd) bool {
 		// before exec callback
 		log.WithFields(LogCronjobToFields(cronjob)).Infof("executing")
 		return true
@@ -45,7 +44,7 @@ func (r *Runner) Add(cronjob CrontabEntry) error {
 		log.WithFields(LogCronjobToFields(cronjob)).Errorf("cronjob failed adding:%v", err)
 	} else {
 		cronjob.SetEntryId(eid)
-		r.cronjobs[eid] = &cronjob
+		r.cronjobs = append(r.cronjobs, &cronjob)
 		prometheusMetricTask.With(r.cronjobToPrometheusLabels(cronjob)).Set(1)
 		log.WithFields(LogCronjobToFields(cronjob)).Infof("cronjob added")
 	}
@@ -55,7 +54,7 @@ func (r *Runner) Add(cronjob CrontabEntry) error {
 
 // Add crontab entry with user
 func (r *Runner) AddWithUser(cronjob CrontabEntry) error {
-	eid, err := r.cron.AddFunc(cronjob.Spec, r.cmdFunc(&cronjob, func(execCmd *exec.Cmd) bool {
+	eid, err := r.cron.AddJob(cronjob.Spec, r.cmdFunc(&cronjob, func(execCmd *exec.Cmd) bool {
 		// before exec callback
 		log.WithFields(LogCronjobToFields(cronjob)).Debugf("executing")
 
@@ -91,7 +90,7 @@ func (r *Runner) AddWithUser(cronjob CrontabEntry) error {
 		log.WithFields(LogCronjobToFields(cronjob)).Errorf("cronjob failed adding: %v", err)
 	} else {
 		cronjob.SetEntryId(eid)
-		r.cronjobs[eid] = &cronjob
+		r.cronjobs = append(r.cronjobs, &cronjob)
 		prometheusMetricTask.With(r.cronjobToPrometheusLabels(cronjob)).Set(1)
 		log.WithFields(LogCronjobToFields(cronjob)).Infof("cronjob added")
 	}
@@ -115,13 +114,13 @@ func (r *Runner) Start() {
 func (r *Runner) Stop() {
 	log.Infof("stop runner")
 	ctx := r.cron.Stop()
-	<-ctx.Done()
+	<-ctx
 	log.Infof("stopped runner")
 }
 
 // Execute crontab command
-func (r *Runner) cmdFunc(cronjob *CrontabEntry, cmdCallback func(*exec.Cmd) bool) func() {
-	cmdFunc := func() {
+func (r *Runner) cmdFunc(cronjob *CrontabEntry, cmdCallback func(*exec.Cmd) bool) cron.IntoJob {
+	cmdFunc := func(ctx context.Context) {
 		// fall back to normal shell if not specified
 		taskShell := cronjob.Shell
 		if taskShell == "" {
@@ -173,6 +172,7 @@ func (r *Runner) cmdFunc(cronjob *CrontabEntry, cmdCallback func(*exec.Cmd) bool
 			}
 		}
 	}
+
 	return cmdFunc
 }
 
@@ -192,7 +192,7 @@ func (r *Runner) cronjobToPrometheusLabels(cronjob CrontabEntry, additionalLabel
 
 func (r *Runner) updateCronEntryMetrics(cronjob *CrontabEntry) {
 	cronjobMetricCommonLables := r.cronjobToPrometheusLabels(*cronjob)
-	entry := r.cron.Entry(cronjob.EntryId)
+	entry, _ := r.cron.Entry(cronjob.EntryId)
 
 	if entry.Next.IsZero() {
 		prometheusMetricTaskRunNextTs.With(cronjobMetricCommonLables).Set(0)

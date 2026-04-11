@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/robfig/cron/v3"
+	"github.com/alaingilbert/cron"
 )
 
 const (
@@ -121,12 +121,12 @@ func (p *Parser) parseLines(io io.Reader) []CrontabEntry {
 
 			if p.cronjobUsername == CRONTAB_TYPE_SYSTEM {
 				crontabSpec = strings.TrimSpace(m[1])
-				crontabUser = strings.TrimSpace(m[3])
-				crontabCommand = strings.TrimSpace(m[4])
+				crontabUser = strings.TrimSpace(m[2])
+				crontabCommand = strings.TrimSpace(m[3])
 			} else {
 				crontabSpec = strings.TrimSpace(m[1])
 				crontabUser = p.cronjobUsername
-				crontabCommand = strings.TrimSpace(m[3])
+				crontabCommand = strings.TrimSpace(m[2])
 			}
 
 			// shrink white spaces for better handling
