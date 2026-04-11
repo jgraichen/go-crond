@@ -1,28 +1,30 @@
 # go-crond
 
-[![GitHub release](https://img.shields.io/github/release/webdevops/go-crond.svg)](https://github.com/webdevops/go-crond/releases)
-[![license](https://img.shields.io/github/license/webdevops/go-crond.svg)](https://github.com/webdevops/go-crond/blob/master/LICENSE)
-[![DockerHub](https://img.shields.io/badge/DockerHub-webdevops%2Fgo--crond-blue)](https://hub.docker.com/r/webdevops/go-crond/)
-[![Quay.io](https://img.shields.io/badge/Quay.io-webdevops%2Fgo--crond-blue)](https://quay.io/repository/webdevops/go-crond)
-[![Github All Releases](https://img.shields.io/github/downloads/webdevops/go-crond/total.svg)]()
-[![Github Releases](https://img.shields.io/github/downloads/webdevops/go-crond/latest/total.svg)]()
+[![GitHub release](https://img.shields.io/github/release/jgraichen/go-crond.svg)](https://github.com/jgraichen/go-crond/releases)
+[![Licensed GPL-2.0](https://img.shields.io/github/license/jgraichen/go-crond.svg)](https://github.com/jgraichen/go-crond/blob/master/LICENSE)
 
-A cron daemon written in golang
+> A cron daemon written in golang
+>
+> Inspired by <https://github.com/anarcher/go-cron>, using <https://godoc.org/github.com/robfig/cron>.
 
-Inspired by https://github.com/anarcher/go-cron
+Fork of [webdevops/go-crond](https://github.com/webdevops/go-crond) to maintain up-to-date binaries and container images for personal use.
 
-Using https://godoc.org/github.com/robfig/cron
+## Container images
 
-## Docker images
+Only released to [`ghcr.io/jgraichen/go-crond`](https://github.com/jgraichen/go-crond/pkgs/container/go-crond).
 
-on [Docker hub](https://hub.docker.com/repository/docker/webdevops/go-crond/tags)
+### Usage
 
-- `webdevops/go-crond:alpine` (based on `alpine`)
-- `webdevops/go-crond:ubuntu` (based on `ubuntu:latest`)
-- `webdevops/go-crond:debian` (based on `debian:stable-slim`)
-- `webdevops/go-crond:{version}-alpine` (based on `alpine`)
-- `webdevops/go-crond:{version}-ubuntu` (based on `ubuntu:latest`)
-- `webdevops/go-crond:{version}-debian` (based on `debian:stable-slim`)
+Use the container image to copy the correct binary into your own application, and run `go-crond` as an entry point, as a s6 service, or from your own entry point script.
+
+```Dockerfile
+FROM ghcr.io/jgraichen/go-crond:24.0.0 AS go-crond
+
+FROM your-base-image
+COPY --from=go-crond /usr/bin/go-crond /usr/bin/go-crond
+
+# ...
+```
 
 ## Features
 
@@ -30,12 +32,12 @@ on [Docker hub](https://hub.docker.com/repository/docker/webdevops/go-crond/tags
 - user crontabs (without username inside)
 - run-parts support
 - Logging to STDOUT and STDERR (instead of sending mails)
-- Keep current environment (eg. for usage in Docker containers)
-- Supports Linux, MacOS, ARM/ARM64 (Rasbperry Pi and others)
+- Keep current environment (e.g. for usage in Docker containers)
+- Supports Linux, macOS, ARM/ARM64 (Raspberry Pi and others)
 
-## Usage
+## CLI Usage
 
-```
+```console
 Usage:
   go-crond [OPTIONS] [Crontabs...]
 
@@ -77,61 +79,51 @@ Crontab files can be added as arguments or automatic included by using eg. `--in
 
 Run crond with a system crontab:
 
-    go-crond examples/crontab
-
+```console
+go-crond examples/crontab
+```
 
 Run crond with user crontabs (without user in it) under specific users:
 
-    go-crond \
-        root:examples/crontab-root \
-        guest:examples/crontab-guest
-
+```console
+go-crond \
+    root:examples/crontab-root \
+    guest:examples/crontab-guest
+```
 
 Run crond with auto include of /etc/cron.d and script execution of hourly, weekly, daily and monthly:
 
-    go-crond \
-        --include=/etc/cron.d \
-        --run-parts-hourly=/etc/cron.hourly \
-        --run-parts-weekly=/etc/cron.weekly \
-        --run-parts-daily=/etc/cron.daily \
-        --run-parts-monthly=/etc/cron.monthly
+```console
+go-crond \
+    --include=/etc/cron.d \
+    --run-parts-hourly=/etc/cron.hourly \
+    --run-parts-weekly=/etc/cron.weekly \
+    --run-parts-daily=/etc/cron.daily \
+    --run-parts-monthly=/etc/cron.monthly
+```
 
 Run crond with run-parts with custom time spec:
 
-    go-crond \
-        --run-parts=1m:/etc/cron.minute \
-        --run-parts=15m:/etc/cron.15min
+```console
+go-crond \
+    --run-parts=1m:/etc/cron.minute \
+    --run-parts=15m:/etc/cron.15min
+```
 
 Run crond with run-parts with custom time spec and different user:
 
-    go-crond \
-        --run-parts=1m:application:/etc/cron.minute \
-        --run-parts=15m:admin:/etc/cron.15min
-
-## Installation
-
-```bash
-GOCROND_VERSION=22.9.1 \
-GOCRON_OS=linux \
-GOCRON_ARCH=amd64 \
-&& wget -O /usr/local/bin/go-crond https://github.com/webdevops/go-crond/releases/download/${GOCROND_VERSION}/go-crond.${GOCRON_OS}.${GOCRON_ARCH} \
-&& chmod +x /usr/local/bin/go-crond
+```console
+go-crond \
+    --run-parts=1m:application:/etc/cron.minute \
+    --run-parts=15m:admin:/etc/cron.15min
 ```
-
-## Docker images
-
-| Image                       | Description                                    |
-|:----------------------------|:-----------------------------------------------|
-| `webdevops/go-crond:latest` | Latest release, binary only                    |
-| `webdevops/go-crond:master` | Current development version in branch `master` |
 
 ## Metrics
 
-go-crond exposes [Prometheus][] metrics on `:8080/metrics` if enabled.
-
+`go-crond` exposes [Prometheus][] metrics on `:8080/metrics` if enabled.
 
 | Metric                      | Description                                     |
-|:----------------------------|:------------------------------------------------|
+| :-------------------------- | :---------------------------------------------- |
 | `gocrond_task_info`         | List of all cronjobs                            |
 | `gocrond_task_run_count`    | Counter for each executed task                  |
 | `gocrond_task_run_result`   | Last status (0=failed, 1=success) for each task |
