@@ -29,9 +29,8 @@ var (
 	opts      config.Opts
 	argparser *flags.Parser
 
-	// Git version information
-	gitCommit = "<unknown>"
-	gitTag    = "<unknown>"
+	version = "dev"
+	commit  = "none"
 )
 
 func initArgParser() {
@@ -52,13 +51,13 @@ func initArgParser() {
 
 	// --dumpversion
 	if opts.ShowOnlyVersion {
-		fmt.Println(gitTag)
+		fmt.Println(commit)
 		os.Exit(0)
 	}
 
 	// --version
 	if opts.ShowVersion {
-		fmt.Printf("%s version %s (%s)\n", Name, gitTag, gitCommit)
+		fmt.Printf("%s version %s (%s)\n", Name, version, commit)
 		fmt.Printf("Copyright (C) 2022 %s\n", Author)
 		os.Exit(0)
 	}
@@ -372,7 +371,7 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP)
 
-	log.Infof("starting %s version %s (%s; %s) ", Name, gitTag, gitCommit, runtime.Version())
+	log.Infof("starting %s version %s (%s; %s) ", Name, version, commit, runtime.Version())
 	log.Info(string(opts.GetJson()))
 
 	// check if user switching is possible (have to be root)
