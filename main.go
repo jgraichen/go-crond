@@ -186,7 +186,13 @@ func parseCrontab(path string, username string) []CrontabEntry {
 		log.Fatalf("parser read err: %v", err)
 	}
 
-	crontabEntries := parser.Parse()
+	io, err := os.Open(path)
+	if err != nil {
+		log.Fatalf("crontab path: %v err:%v", path, err)
+	}
+	defer io.Close()
+
+	crontabEntries := parser.Parse(io)
 
 	return crontabEntries
 }

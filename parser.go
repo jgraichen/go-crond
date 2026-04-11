@@ -3,12 +3,11 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"os"
+	"io"
 	"regexp"
 	"strings"
 
 	"github.com/robfig/cron/v3"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -17,7 +16,7 @@ const (
 	//                     ----spec------------------------------------    --user--  -cmd-
 	CRONJOB_SYSTEM = `^\s*([^@\s]+\s+\S+\s+\S+\s+\S+\s+\S+|@every\s+\S+)\s+([^\s]+)\s+(.+)$`
 
-	//                  ----spec------------------------------------    -cmd-
+	//                   ----spec------------------------------------   -cmd-
 	CRONJOB_USER = `^\s*([^@\s]+\s+\S+\s+\S+\s+\S+\s+\S+|@every\s+\S+)\s+(.+)$`
 
 	DEFAULT_SHELL = "sh"
@@ -72,14 +71,14 @@ func (e *CrontabEntry) SetEntryId(eid cron.EntryID) {
 }
 
 // Parse crontab
-func (p *Parser) Parse() []CrontabEntry {
-	entries := p.parseLines()
+func (p *Parser) Parse(io io.Reader) []CrontabEntry {
+	entries := p.parseLines(io)
 
 	return entries
 }
 
 // Parse lines from crontab
-func (p *Parser) parseLines() []CrontabEntry {
+func (p *Parser) parseLines(io io.Reader) []CrontabEntry {
 	var (
 		entries        []CrontabEntry
 		crontabSpec    string
@@ -88,17 +87,11 @@ func (p *Parser) parseLines() []CrontabEntry {
 		environment    []string
 	)
 
-	reader, err := os.Open(p.path)
-	if err != nil {
-		log.Fatalf("crontab path: %v err:%v", p.path, err)
-	}
-	defer reader.Close()
-
 	shell := DEFAULT_SHELL
 
 	specCleanupRegexp := regexp.MustCompile(`\s+`)
 
-	scanner := bufio.NewScanner(reader)
+	scanner := bufio.NewScanner(io)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 
@@ -128,12 +121,12 @@ func (p *Parser) parseLines() []CrontabEntry {
 
 			if p.cronjobUsername == CRONTAB_TYPE_SYSTEM {
 				crontabSpec = strings.TrimSpace(m[1])
-				crontabUser = strings.TrimSpace(m[2])
-				crontabCommand = strings.TrimSpace(m[3])
+				crontabUser = strings.TrimSpace(m[3])
+				crontabCommand = strings.TrimSpace(m[4])
 			} else {
 				crontabSpec = strings.TrimSpace(m[1])
 				crontabUser = p.cronjobUsername
-				crontabCommand = strings.TrimSpace(m[2])
+				crontabCommand = strings.TrimSpace(m[3])
 			}
 
 			// shrink white spaces for better handling
