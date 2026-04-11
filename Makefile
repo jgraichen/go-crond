@@ -1,5 +1,7 @@
 #!/usr/bin/env make -f
 
+all: build
+
 .PHONY: clean
 clean:
 	git clean -Xfd .
