@@ -6,6 +6,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/alaingilbert/cron"
 )
@@ -28,6 +29,27 @@ var (
 	cronjobUserRegex   = regexp.MustCompile(CRONJOB_USER)
 )
 
+type LockMode int
+
+const (
+	NoLock    LockMode = iota // 0
+	LockSkip                  // 1
+	LockQueue                 // 2
+)
+
+func (l LockMode) String() string {
+	switch l {
+	case NoLock:
+		return "no"
+	case LockSkip:
+		return "skip"
+	case LockQueue:
+		return "queue"
+	default:
+		return "unknown"
+	}
+}
+
 type CrontabEntry struct {
 	Spec        string
 	User        string
@@ -36,6 +58,8 @@ type CrontabEntry struct {
 	Shell       string
 	CrontabPath string
 	EntryId     cron.EntryID
+	Timeout     time.Duration
+	LockMode    LockMode
 }
 
 type Parser struct {
@@ -72,13 +96,6 @@ func (e *CrontabEntry) SetEntryId(eid cron.EntryID) {
 
 // Parse crontab
 func (p *Parser) Parse(io io.Reader) []CrontabEntry {
-	entries := p.parseLines(io)
-
-	return entries
-}
-
-// Parse lines from crontab
-func (p *Parser) parseLines(io io.Reader) []CrontabEntry {
 	var (
 		entries        []CrontabEntry
 		crontabSpec    string
@@ -88,6 +105,8 @@ func (p *Parser) parseLines(io io.Reader) []CrontabEntry {
 	)
 
 	shell := DEFAULT_SHELL
+	timeout := time.Duration(0)
+	lockMode := NoLock
 
 	specCleanupRegexp := regexp.MustCompile(`\s+`)
 
@@ -110,6 +129,21 @@ func (p *Parser) parseLines(io io.Reader) []CrontabEntry {
 				// custom shell for command
 				shell = envValue
 			} else {
+				if envName == "GOCROND_TIMEOUT" {
+					timeout, _ = time.ParseDuration(envValue)
+				}
+
+				if envName == "GOCROND_LOCK" {
+					switch envValue {
+					case "skip":
+						lockMode = LockSkip
+					case "queue":
+						lockMode = LockQueue
+					default:
+						// error
+					}
+				}
+
 				// normal environment variable
 				environment = append(environment, fmt.Sprintf("%s=%s", envName, envValue))
 			}
@@ -141,6 +175,8 @@ func (p *Parser) parseLines(io io.Reader) []CrontabEntry {
 					Env:         environment,
 					Shell:       shell,
 					CrontabPath: p.path,
+					Timeout:     timeout,
+					LockMode:    lockMode,
 				},
 			)
 		}

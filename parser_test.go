@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -20,6 +21,30 @@ func TestParseUser(t *testing.T) {
 		assert.Len(t, entry.Env, 0)
 		assert.Equal(t, entry.Shell, "sh")
 		assert.Equal(t, entry.CrontabPath, "/user/crontab")
+		assert.Equal(t, time.Duration(0), entry.Timeout)
+		assert.Equal(t, NoLock, entry.LockMode)
+	}
+}
+
+func TestParseUserTimeoutAndLockMode(t *testing.T) {
+	parser, _ := NewCronjobUserParser("/user/crontab", "user")
+
+	entries := parser.Parse(strings.NewReader(`
+		GOCROND_TIMEOUT=90s
+		GOCROND_LOCK=skip
+		* * * * * command-skip
+		GOCROND_LOCK=queue
+		* * * * * command-queue
+	`))
+
+	if assert.Len(t, entries, 2) {
+		assert.Equal(t, "command-skip", entries[0].Command)
+		assert.Equal(t, 90*time.Second, entries[0].Timeout)
+		assert.Equal(t, LockSkip, entries[0].LockMode)
+
+		assert.Equal(t, "command-queue", entries[1].Command)
+		assert.Equal(t, 90*time.Second, entries[1].Timeout)
+		assert.Equal(t, LockQueue, entries[1].LockMode)
 	}
 }
 
@@ -72,5 +97,7 @@ func TestParseSystem(t *testing.T) {
 		assert.Len(t, entry.Env, 0)
 		assert.Equal(t, entry.Shell, "sh")
 		assert.Equal(t, entry.CrontabPath, "/user/crontab")
+		assert.Equal(t, time.Duration(0), entry.Timeout)
+		assert.Equal(t, NoLock, entry.LockMode)
 	}
 }

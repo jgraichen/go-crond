@@ -11,5 +11,7 @@ func LogCronjobToFields(cronjob CrontabEntry) log.Fields {
 		"command": cronjob.Command,
 		"crontab": cronjob.CrontabPath,
 		"shell":   cronjob.Shell,
+		"timeout": cronjob.Timeout.String(),
+		"lock":    cronjob.LockMode.String(),
 	}
 }

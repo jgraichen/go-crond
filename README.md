@@ -34,6 +34,8 @@ COPY --from=go-crond /usr/bin/go-crond /usr/bin/go-crond
 - Logging to STDOUT and STDERR (instead of sending mails)
 - Keep current environment (e.g. for usage in Docker containers)
 - Supports Linux, macOS, ARM/ARM64 (Raspberry Pi and others)
+- Timeouts
+- Locking (skip or queue)
 
 ## CLI Usage
 
@@ -116,6 +118,24 @@ Run crond with run-parts with custom time spec and different user:
 go-crond \
     --run-parts=1m:application:/etc/cron.minute \
     --run-parts=15m:admin:/etc/cron.15min
+```
+
+## Timeout and Locking
+
+`go-crond` supports timeouts and locking for cronjobs.
+
+You can set a timeout for each cronjob by setting the `GOCROND_TIMEOUT` environment variable to a duration string (e.g. `30s`, `1m`, `1h`).
+
+Two lock modes are supported: `skip` and `queue`. In `skip` mode, if a
+cronjob is still running when it's time to run it again, the new
+execution will be skipped. In `queue` mode, the new execution will be
+queued and executed immediately after the current execution finishes.
+
+```cronjob
+GOCROND_TIMEOUT=30s
+GOCROND_LOCK=skip
+
+* *   *   *   *  sleep 5 && id >> /tmp/test-1
 ```
 
 ## Metrics
