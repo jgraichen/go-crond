@@ -18,7 +18,7 @@ Only released to [`ghcr.io/jgraichen/go-crond`](https://github.com/jgraichen/go-
 Use the container image to copy the correct binary into your own application, and run `go-crond` as an entry point, as a s6 service, or from your own entry point script.
 
 ```Dockerfile
-FROM ghcr.io/jgraichen/go-crond:24.0.0 AS go-crond
+FROM ghcr.io/jgraichen/go-crond:24.1.0 AS go-crond
 
 FROM your-base-image
 COPY --from=go-crond /usr/bin/go-crond /usr/bin/go-crond

@@ -9,13 +9,19 @@ This project adheres to [Semantic Versioning](http://semver.org/) and [Keep a Ch
 
 ### New
 
-- Add support for job locking and timeouts
-
 ### Changes
 
 ### Fixes
 
 ### Breaks
+
+## 24.1.0 - (2026-04-29)
+
+---
+
+### New
+
+- Add support for job locking and timeouts
 
 ## 24.0.0 - (2026-04-11)
 
