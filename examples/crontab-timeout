@@ -1,0 +1,7 @@
+# comment
+
+GOCROND_TIMEOUT=5s
+GOCROND_LOCK=skip
+
+# m h  dom mon dow user command
+@every 1s root sleep 10

@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"os/user"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -20,12 +22,13 @@ type Runner struct {
 }
 
 func NewRunner() *Runner {
-	cron := cron.New().
+	c := cron.New().
 		WithParser(cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow | cron.Descriptor)).
+		WithLogger(cron.DiscardLogger).
 		Build()
 
 	r := &Runner{
-		cron:     cron,
+		cron:     c,
 		cronjobs: make([]*CrontabEntry, 0),
 	}
 	return r
@@ -130,7 +133,8 @@ func (r *Runner) cmdFunc(cronjob *CrontabEntry, cmdCallback func(*exec.Cmd) bool
 		start := time.Now()
 
 		// Init command
-		execCmd := exec.Command(taskShell, "-c", cronjob.Command)
+		execCmd := exec.CommandContext(ctx, taskShell, "-c", cronjob.Command)
+		execCmd.WaitDelay = 100 * time.Millisecond
 
 		// add custom env to cronjob
 		if len(cronjob.Env) >= 1 {
@@ -141,7 +145,7 @@ func (r *Runner) cmdFunc(cronjob *CrontabEntry, cmdCallback func(*exec.Cmd) bool
 		if cmdCallback(execCmd) {
 
 			// exec job
-			cmdStdout, err := execCmd.CombinedOutput()
+			cmdOut, err := execCmd.CombinedOutput()
 
 			elapsed := time.Since(start)
 
@@ -159,21 +163,36 @@ func (r *Runner) cmdFunc(cronjob *CrontabEntry, cmdCallback func(*exec.Cmd) bool
 				prometheusMetricTaskRunCount.With(r.cronjobToPrometheusLabels(*cronjob, prometheus.Labels{"result": "error"})).Inc()
 				prometheusMetricTaskRunResult.With(cronjobMetricCommonLables).Set(0)
 				logFields["result"] = "error"
+				logFields["error"] = err.Error()
+				log.WithFields(logFields).Error("failed: " + err.Error())
 			} else {
 				prometheusMetricTaskRunCount.With(r.cronjobToPrometheusLabels(*cronjob, prometheus.Labels{"result": "success"})).Inc()
 				prometheusMetricTaskRunResult.With(cronjobMetricCommonLables).Set(1)
 				logFields["result"] = "success"
+				log.WithFields(logFields).Info("finished")
 			}
 
 			r.updateCronEntryMetrics(cronjob)
-			log.WithFields(logFields).Info("finished")
-			if len(cmdStdout) > 0 {
-				log.Debugln(string(cmdStdout))
+			if len(cmdOut) > 0 {
+				log.Debugln(string(cmdOut))
 			}
 		}
 	}
 
-	return cmdFunc
+	var job cron.IntoJob = cmdFunc
+
+	if cronjob.Timeout > 0 {
+		job = cron.WithTimeout(cronjob.Timeout, job)
+	}
+
+	switch cronjob.LockMode {
+	case LockSkip:
+		job = skipIfStillRunning(job, cronjob)
+	case LockQueue:
+		job = delayIfStillRunning(job, cronjob)
+	}
+
+	return job
 }
 
 func (r *Runner) cronjobToPrometheusLabels(cronjob CrontabEntry, additionalLabels ...prometheus.Labels) (labels prometheus.Labels) {
@@ -210,5 +229,45 @@ func (r *Runner) updateCronEntryMetrics(cronjob *CrontabEntry) {
 func (r *Runner) initAllCronEntryMetrics() {
 	for _, cronjob := range r.cronjobs {
 		r.updateCronEntryMetrics(cronjob)
+	}
+}
+
+func skipIfStillRunning(job cron.IntoJob, cronjob *CrontabEntry) cron.IntoJob {
+	var running atomic.Bool
+
+	logger := log.WithFields(LogCronjobToFields(*cronjob))
+
+	return cron.FuncJob(func(ctx context.Context, c *cron.Cron, r cron.JobRun) (err error) {
+		if running.CompareAndSwap(false, true) {
+			defer running.Store(false)
+			err = cron.J(job).Run(ctx, c, r)
+		} else {
+			logger.WithField("action", "skip").Warn("previous job still running, skipping")
+			return cron.ErrJobAlreadyRunning
+		}
+		return
+	})
+}
+
+func delayIfStillRunning(job cron.IntoJob, cronjob *CrontabEntry) cron.IntoJob {
+	var mu sync.Mutex
+
+	logger := log.WithFields(LogCronjobToFields(*cronjob))
+
+	return func(ctx context.Context, c *cron.Cron, r cron.JobRun) (err error) {
+		start := time.Now()
+
+		logger.
+			WithField("action", "delay").
+			Warn("previous job still running, delaying")
+
+		mu.Lock()
+		defer mu.Unlock()
+		if delay := time.Since(start); delay > time.Second {
+			logger.
+				WithField("delay", delay.String()).
+				Info("executing queued job")
+		}
+		return cron.J(job).Run(ctx, c, r)
 	}
 }
