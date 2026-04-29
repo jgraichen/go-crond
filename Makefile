@@ -21,7 +21,7 @@ check: vendor lint test
 
 .PHONY: test
 test:
-	go test ./...
+	go test ./... -v
 
 .PHONY: lint
 lint:
