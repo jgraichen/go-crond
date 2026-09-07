@@ -1,6 +1,6 @@
 module github.com/webdevops/go-crond
 
-go 1.26
+go 1.27
 
 require (
 	github.com/alaingilbert/cron v1.2.0
